@@ -9,7 +9,6 @@ from mpld3 import plugins
 np.random.seed(9615)
 df = pd.read_csv("./currencies.csv")
 
-
 drawing_tokens = [
     "UST-USD",
     "BTC-USD",
@@ -24,84 +23,103 @@ drawing_tokens = [
     "THETA-USD",
     "ETH-USD"
   ]
+
 fig, (vol, prc) = plt.subplots(2, 1, figsize=(20, 12))
 cmap = plt.get_cmap("Paired")
 selected_line_style = '-.'
 marker='.'
-volume_l= []
+volume_l_top= []
+volume_l_bottom= []
 labels_pred = []
 price_pred_l = []
-vol2 = None
-for i, ticker in enumerate(drawing_tokens):
-    x = pd.Series(map(lambda x: datetime.datetime.strptime(x,'%Y-%m-%d').date(), df[df.Ticker == ticker].Date.to_list()))
-    y = df[df.Ticker == ticker].Volume.astype(int)
-    if ticker in ("BTC-USD", "BTCB-USD", "ETH-USD"):
-        if vol2 is None:
-            vol2 = vol.twinx()
-        l, = vol2.plot(x, y, label=ticker, color=cmap(i), marker=marker, ls=selected_line_style)
-        volume_l.append(l)
-    else:
-        l, = vol.plot(x, y, label=ticker, color=cmap(i))
-        volume_l.append(l)
+vol2 = vol.twinx()
+labels_top = []
+labels_bottom = []
+price_l_top = []
+price_l_bottom = []
+
+def draw_volume(df, drawing_tokens, vol, cmap, selected_line_style, marker, volume_l_top, volume_l_bottom, vol2, labels_top, labels_bottom):
+    for i, ticker in enumerate(drawing_tokens):
+        x = pd.Series(map(lambda x: datetime.datetime.strptime(x,'%Y-%m-%d').date(), df[df.Ticker == ticker].Date.to_list()))
+        y = df[df.Ticker == ticker].Volume.astype(int)
+        if ticker in ("BTC-USD", "ETH-USD"):
+            l, = vol2.plot(x, y, label=ticker, color=cmap(i), marker=marker, markersize=1, ls=selected_line_style)
+            volume_l_bottom.append(l)
+            labels_bottom.append(ticker + " (dashed)")
+
+        else:
+            if ticker == "BTCB-USD":
+                l, = vol.plot(x, y, label=ticker, color=cmap(i), marker=marker, markersize=1, ls=selected_line_style)
+                volume_l_bottom.append(l)
+                labels_bottom.append(ticker + " (dashed)")
+            else:
+                l, = vol.plot(x, y, label=ticker, color=cmap(i))
+                volume_l_top.append(l)
+                labels_top.append(ticker)
+
+draw_volume(df, drawing_tokens, vol, cmap, selected_line_style, marker, volume_l_top, volume_l_bottom, vol2, labels_top, labels_bottom)
 
 vol.set_xlabel('Date')
 vol.set_ylabel('Volume')
 vol.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 vol.set_title('Volume over time', size=20)
-prc2 = None
+prc2 = prc.twinx()
 
 
-price_l = []
-for i, ticker in enumerate(drawing_tokens):
-    x = pd.Series(map(lambda x: datetime.datetime.strptime(x,'%Y-%m-%d').date(), df[df.Ticker == ticker].Date.to_list()))
-    y = (df[df.Ticker == ticker].Open + df[df.Ticker == ticker].Close) / 2
-    if ticker in ("BTC-USD", "BTCB-USD"):
-        if prc2 is None:
-            prc2 = prc.twinx()
-        l, = prc2.plot(x, y, label=ticker, color=cmap(i), marker=marker, ls=selected_line_style)
-        price_l.append(l)
+def draw_price(df, drawing_tokens, prc, cmap, selected_line_style, marker, labels_pred, price_pred_l, price_l_top, price_l_bottom, prc2):
+    for i, ticker in enumerate(drawing_tokens):
+        x = pd.Series(map(lambda x: datetime.datetime.strptime(x,'%Y-%m-%d').date(), df[df.Ticker == ticker].Date.to_list()))
+        y = (df[df.Ticker == ticker].Open + df[df.Ticker == ticker].Close) / 2
+        if ticker in ("BTC-USD", "BTCB-USD"):
+            l, = prc2.plot(x, y, label=ticker, color=cmap(i), marker=marker, markersize=1, ls=selected_line_style)
+            price_l_bottom.append(l)
 
-    else:
-        l, = prc.plot(x, y, label=ticker, color=cmap(i))
-        price_l.append(l)
-
-    if ticker in ("BTC-USD", "ETH-USD"):
-        # price prediction for btc & eth
-        last_date = x.tail(1).item()
-        last_n_for_pred = 600
-        x = x.index.to_list()[:last_n_for_pred]
-        y = y.tail(last_n_for_pred)
-        x_ind_last = int(x[-1])
-        pol = np.polyfit(x, y, 4)
-        model = np.poly1d(pol)
-        x_for_pred = [ i for i in range(x_ind_last, x_ind_last + 30) ]
-        y_pred = [model(i) for i in x_for_pred]
-        x = pd.Series(last_date + datetime.timedelta(days = i + 1) for i in range(30))
-        if ticker == 'BTC-USD':
-            l, = prc2.plot(x, y_pred, label=ticker + "_prediction", color=cmap(i), ls=selected_line_style)
         else:
-            l, = prc.plot(x, y_pred, label=ticker + "_prediction", color=cmap(i), ls=selected_line_style)
-        labels_pred.append(ticker + '_prediction')
-        price_pred_l.append(l)
+            if ticker == 'ETH-USD':
+                l, = prc.plot(x, y, label=ticker, color=cmap(i), marker=marker, markersize=1, ls=selected_line_style)
+                price_l_bottom.append(l)
+            else:
+                l, = prc.plot(x, y, label=ticker, color=cmap(i))
+                price_l_top.append(l)
 
-labels = drawing_tokens[:]
+        if ticker in ("BTC-USD", "ETH-USD", ):
+        # price prediction for btc & eth
+            last_date = x.tail(1).item()
+            last_n_for_pred = 600
+            x = x.index.to_list()[:last_n_for_pred]
+            y = y.tail(last_n_for_pred)
+            x_ind_last = int(x[-1])
+            pol = np.polyfit(x, y, 4)
+            model = np.poly1d(pol)
+            x_for_pred = [ i for i in range(x_ind_last, x_ind_last + 30) ]
+            y_pred = [model(i) for i in x_for_pred]
+            x = pd.Series(last_date + datetime.timedelta(days = i + 1) for i in range(30))
+            if ticker == 'BTC-USD':
+                l, = prc2.plot(x, y_pred, label=ticker + " (prediction)", color=cmap(i))
+            else:
+                l, = prc.plot(x, y_pred, label=ticker + " (prediction)", color=cmap(i))
+            labels_pred.append(ticker + ' (prediction)')
+            price_pred_l.append(l)
 
+draw_price(df, drawing_tokens, prc, cmap, selected_line_style, marker, labels_pred, price_pred_l, price_l_top, price_l_bottom, prc2)
 
 prc.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 
-lines = np.array([volume_l, price_l]).T
-interactive_legend = plugins.InteractiveLegendPlugin(lines,
-                                                     labels,
+lines = np.array([volume_l_top, price_l_top]).T
+
+def create_legend(fig, labels_top, lines, visible, offset):
+    interactive_legend_top = plugins.InteractiveLegendPlugin(lines,
+                                                     labels_top,
                                                      alpha_unsel=0.05,
                                                      alpha_over=1.5,
-                                                     start_visible=True, legend_offset=(50, 580))
-plugins.connect(fig, interactive_legend)
-interactive_legend = plugins.InteractiveLegendPlugin(price_pred_l,
-                                                     labels_pred,
-                                                     alpha_unsel=0.05,
-                                                     alpha_over=1.5,
-                                                     start_visible=True, legend_offset=(50, 880))
-plugins.connect(fig, interactive_legend)
+                                                     start_visible=visible, legend_offset = offset)
+    plugins.connect(fig, interactive_legend_top)
+
+create_legend(fig, labels_top, lines, False, offset=(100, 50))
+lines = np.array([volume_l_bottom, price_l_bottom]).T
+create_legend(fig, labels_bottom, lines, True, offset=(100, 580))
+create_legend(fig, labels_pred, price_pred_l, False, offset=(100, 630))
+
 
 prc.set_xlabel('Date')
 prc.set_ylabel('Price')
